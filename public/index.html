@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>進階聯絡人管理系統</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; max-width: 600px; margin: auto; background-color: #f8f9fa; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { color: #333; margin-top: 0; }
+        .stats-bar { color: #007bff; font-weight: bold; margin-bottom: 15px; font-size: 0.9em; }
+        input { padding: 12px; width: 95%; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 1em; }
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: 0.3s; }
+        #saveBtn { background-color: #007bff; color: white; }
+        #saveBtn:hover { background-color: #0056b3; }
+        #delBtn { background-color: #dc3545; color: white; display: none; }
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        tr:hover { background-color: #f1f7ff; cursor: pointer; }
+        .selected { background-color: #e7f1ff !important; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>📇 聯絡人管理系統</h2>
+        <div class="stats-bar">📊 系統統計：目前共有 <span id="totalCount">0</span> 位聯絡人</div>
+        
+        <input type="text" id="search" placeholder="🔍 搜尋姓名或電話..." oninput="load()">
+        
+        <div style="border-top: 1px solid #eee; padding-top: 20px;">
+            <input type="text" id="name" placeholder="請輸入姓名">
+            <input type="text" id="phone" placeholder="請輸入電話 (至少8碼)">
+            <div class="btn-group">
+                <button id="saveBtn" onclick="save()">新增聯絡人</button>
+                <button id="delBtn" onclick="del()">刪除聯絡人</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <table id="list">
+            <thead><tr><th>姓名</th><th>電話</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        let currId = null;
+
+        // 改動 2：整合載入與統計 (展現非同步溝通)
+        async function load() {
+            // 1. 抓取聯絡人清單
+            const k = document.getElementById('search').value;
+            const res = await fetch(`/contacts?keyword=${k}`);
+            const data = await res.json();
+            
+            // 2. 抓取統計數據
+            const statsRes = await fetch('/stats');
+            const statsData = await statsRes.json();
+            document.getElementById('totalCount').innerText = statsData.total;
+
+            // 渲染表格
+            document.querySelector('#list tbody').innerHTML = data.map(c => `
+                <tr onclick="sel(this, ${c.id}, '${c.name}', '${c.phone}')">
+                    <td>${c.name}</td><td>${c.phone}</td>
+                </tr>
+            `).join('');
+        }
+
+        function sel(el, id, n, p) {
+            currId = id;
+            document.querySelectorAll('tr').forEach(r => r.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('name').value = n;
+            document.getElementById('phone').value = p;
+            document.getElementById('saveBtn').innerText = '儲存修改';
+            document.getElementById('delBtn').style.display = 'inline-block';
+        }
+
+        async function save() {
+            const n = document.getElementById('name').value;
+            const p = document.getElementById('phone').value;
+            
+            const res = await fetch(currId ? `/contacts/${currId}` : '/contacts', {
+                method: currId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: n, phone: p })
+            });
+
+            if (res.status === 400) {
+                const errorData = await res.json();
+                alert('錯誤：' + errorData.error);
+            } else {
+                reset(); load();
+            }
+        }
+
+        async function del() {
+            if (confirm('確定要刪除這位聯絡人嗎？')) {
+                await fetch(`/contacts/${currId}`, { method: 'DELETE' });
+                reset(); load();
+            }
+        }
+
+        function reset() {
+            currId = null;
+            document.getElementById('name').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('saveBtn').innerText = '新增聯絡人';
+            document.getElementById('delBtn').style.display = 'none';
+        }
+
+        load(); // 初始化載入
+    </script>
+</body>
+</html>
